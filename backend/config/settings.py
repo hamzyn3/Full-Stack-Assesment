@@ -61,6 +61,7 @@ REST_FRAMEWORK = {
 
 # Third-party API configuration (used from Step 2 onward).
 ORS_API_KEY = os.environ.get("ORS_API_KEY", "")
+ORS_BASE_URL = os.environ.get("ORS_BASE_URL", "https://api.openrouteservice.org")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

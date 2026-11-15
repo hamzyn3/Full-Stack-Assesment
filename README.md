@@ -34,6 +34,16 @@ cp .env.example .env
 npm run dev                 # http://localhost:5173
 ```
 
+## API (so far)
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/health/` | Liveness check |
+| `GET /api/geocode/?q=dallas` | Place suggestions (`{results: [{label, lat, lon}]}`) |
+| `POST /api/routes/` | Up to 3 truck routes. Body: `origin`, `destination` (text or `{label, lat, lon}`), `departure_time` (ISO 8601), `load_weight_lb` |
+
+Routes come from OpenRouteService's `driving-hgv` (truck) profile. Its alternative-route feature is limited to short trips, so when fewer than 3 distinct routes come back the backend requests routes through sideways-offset via points and keeps those that are distinct (under 85% shared path) and not more than 1.5x the fastest duration. Fewer than 3 routes can be returned when the corridor has no real alternatives. Route geometry is returned as `[lat, lon]` pairs.
+
 ## Environment variables
 
 | Variable | Where | Purpose |
@@ -42,5 +52,6 @@ npm run dev                 # http://localhost:5173
 | `DEBUG` | backend | `True` for local development |
 | `ALLOWED_HOSTS` | backend | Comma-separated hostnames |
 | `CORS_ALLOWED_ORIGINS` | backend | Comma-separated frontend origins |
-| `ORS_API_KEY` | backend | OpenRouteService key (used from Step 2) |
+| `ORS_API_KEY` | backend | OpenRouteService key (geocoding + routing) |
+| `ORS_BASE_URL` | backend | Optional override of the ORS base URL |
 | `VITE_API_URL` | frontend | Backend base URL |
