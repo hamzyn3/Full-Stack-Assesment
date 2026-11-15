@@ -25,6 +25,10 @@ class WeatherUnavailableError(WeatherError):
     """Network failure, 5xx, or missing data for a requested hour."""
 
 
+class WeatherRateLimitError(WeatherUnavailableError):
+    """The weather provider is rate limiting us (HTTP 429)."""
+
+
 class ForecastRangeError(WeatherError):
     """The requested dates are outside what the forecast API serves."""
 
@@ -96,6 +100,8 @@ class OpenMeteoClient:
         except requests.RequestException as exc:
             raise WeatherUnavailableError(f"Could not reach the weather provider: {exc}") from exc
 
+        if response.status_code == 429:
+            raise WeatherRateLimitError("The weather provider's rate limit was reached. Wait a minute and try again.")
         if response.status_code == 400:
             raise ForecastRangeError(_reason(response))
         if response.status_code != 200:

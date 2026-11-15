@@ -2,13 +2,14 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .serializers import RouteRequestSerializer
+from .serializers import HeatmapRequestSerializer, RouteRequestSerializer
 from .services.analysis import RouteAnalysis, analyze_routes
+from .services.heatmap import HOURS, build_heatmap
 from .services.ors import NotConfiguredError, OrsClient, OrsError, Place, RouteRequestError
 from .services.recommendation import Recommendation, recommend
 from .services.risk import RiskLevel
 from .services.route_generation import generate_routes
-from .services.weather import ForecastRangeError, OpenMeteoClient, WeatherError
+from .services.weather import ForecastRangeError, OpenMeteoClient, WeatherError, WeatherRateLimitError
 
 
 @api_view(["GET"])
@@ -22,7 +23,7 @@ def _error(message: str, http_status: int) -> Response:
 
 
 def _provider_error_response(exc: OrsError | WeatherError) -> Response:
-    if isinstance(exc, NotConfiguredError):
+    if isinstance(exc, (NotConfiguredError, WeatherRateLimitError)):
         return _error(str(exc), status.HTTP_503_SERVICE_UNAVAILABLE)
     if isinstance(exc, (RouteRequestError, ForecastRangeError)):
         return _error(str(exc), status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -131,5 +132,32 @@ def routes(request):
             "routes": [
                 _route_json(a, rank, recommended=(rank == 1)) for rank, a in enumerate(recommendation.ranked, start=1)
             ],
+        }
+    )
+
+
+@api_view(["POST"])
+def heatmap(request):
+    """Hourly risk grid along the corridor for hours +0..+48: POST /api/heatmap/."""
+    serializer = HeatmapRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    try:
+        result = build_heatmap(
+            [[(lat, lon) for lat, lon in route] for route in data["routes"]],
+            data["departure_time"],
+            data["load_weight_lb"],
+            OpenMeteoClient(),
+        )
+    except WeatherError as exc:
+        return _provider_error_response(exc)
+
+    return Response(
+        {
+            "start_time": result.start.isoformat(),
+            "hours": HOURS,
+            "cell_miles": round(result.cell_miles, 1),
+            "cells": [{"lat": c.lat, "lon": c.lon, "risk": c.risk} for c in result.cells],
         }
     )

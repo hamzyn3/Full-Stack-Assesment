@@ -5,7 +5,13 @@ from django.test import SimpleTestCase, override_settings
 
 from routing.services.ors import OrsClient, Place, RawRoute, RouteRequestError, UpstreamError
 from routing.services.route_generation import Route
-from routing.services.weather import ForecastRangeError, HourlyWeather, OpenMeteoClient, WeatherUnavailableError
+from routing.services.weather import (
+    ForecastRangeError,
+    HourlyWeather,
+    OpenMeteoClient,
+    WeatherRateLimitError,
+    WeatherUnavailableError,
+)
 
 DEPARTURE = datetime(2026, 11, 20, 8, 0, tzinfo=timezone.utc)
 
@@ -128,6 +134,14 @@ class RoutesViewTests(SimpleTestCase):
         response = self.post(VALID_BODY)
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["error"], "out of range")
+
+    @patch.object(OpenMeteoClient, "forecast", side_effect=WeatherRateLimitError("rate limited"))
+    @patch("routing.views.generate_routes")
+    def test_weather_rate_limit_is_503(self, generate, forecast):
+        generate.return_value = [Route("route-1", "Route 1", [(32.78, -96.8), (33.75, -84.39)], 100.0, 6000)]
+        response = self.post(VALID_BODY)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["error"], "rate limited")
 
     @patch.object(OpenMeteoClient, "forecast", side_effect=WeatherUnavailableError("weather down"))
     @patch("routing.views.generate_routes")

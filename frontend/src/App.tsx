@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, fetchRoutes } from './api'
+import { ApiError, fetchHealth, fetchRoutes } from './api'
 import { RouteForm } from './components/RouteForm'
 import { RouteMap } from './components/RouteMap'
 import { SummaryPanel } from './components/SummaryPanel'
 import type { RoutesRequest, RoutesResponse } from './types'
+import { useHeatmap } from './useHeatmap'
 
 type State =
   | { status: 'idle' }
@@ -17,6 +18,11 @@ export default function App() {
   const controllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => controllerRef.current?.abort(), [])
+
+  // Free hosting tiers put idle backends to sleep; this starts waking it while the user fills in the form.
+  useEffect(() => {
+    fetchHealth().catch(() => {})
+  }, [])
 
   async function handleSubmit(request: RoutesRequest) {
     controllerRef.current?.abort()
@@ -38,6 +44,7 @@ export default function App() {
   const handleSelect = useCallback((routeId: string) => setSelectedId(routeId), [])
 
   const data = state.status === 'success' ? state.data : null
+  const { heatmap, retry: retryHeatmap } = useHeatmap(data)
 
   return (
     <div className="layout">
@@ -63,7 +70,7 @@ export default function App() {
       </aside>
 
       <main className="map-area">
-        <RouteMap data={data} selectedId={selectedId} onSelect={handleSelect} />
+        <RouteMap data={data} heatmap={heatmap} onRetryHeatmap={retryHeatmap} selectedId={selectedId} onSelect={handleSelect} />
       </main>
     </div>
   )

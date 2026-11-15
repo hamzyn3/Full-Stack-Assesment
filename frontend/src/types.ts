@@ -61,3 +61,25 @@ export interface RoutesRequest {
   load_weight_lb: number
   checkpoint_interval_miles: CheckpointInterval
 }
+
+export interface HeatCell {
+  lat: number
+  lon: number
+  /** Risk level per forecast hour: 0 (low) to 4 (no travel), or -1 when there is no forecast. */
+  risk: number[]
+}
+
+export interface HeatmapResponse {
+  /** The departure hour (+0h), ISO 8601 UTC. */
+  start_time: string
+  hours: number
+  cell_miles: number
+  cells: HeatCell[]
+}
+
+export interface HeatmapRequest {
+  /** Up to three routes as [lat, lon] polylines. */
+  routes: [number, number][][]
+  departure_time: string
+  load_weight_lb: number
+}

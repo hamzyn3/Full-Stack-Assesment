@@ -25,3 +25,11 @@ export function routeColor(routeId: string): string {
   const number = Number(routeId.split('-')[1])
   return ROUTE_COLORS[(Number.isFinite(number) ? number - 1 : 0) % ROUTE_COLORS.length]
 }
+
+/** Heatmap fill opacity per risk level (index = level). Calm weather stays faint so hazards stand out. */
+export const HEAT_OPACITY = [0.25, 0.55, 0.7, 0.8, 0.85]
+
+/** Risk level index (0-4) to its key; anything else (e.g. -1, no forecast) has no key. */
+export function riskKeyFromLevel(level: number): RiskKey | null {
+  return RISK_ORDER[level] ?? null
+}

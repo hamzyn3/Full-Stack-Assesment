@@ -468,3 +468,101 @@ tbody tr:nth-child(even) {
 .popup dd {
   margin: 0;
 }
+
+/* Heatmap */
+.heat-pane {
+  filter: blur(14px);
+  opacity: 0.7;
+}
+
+.heat-control {
+  position: absolute;
+  left: 12px;
+  bottom: 24px;
+  z-index: 1000;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100% - 24px - 232px));
+  min-width: 260px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 800px) {
+  .heat-control {
+    width: calc(100% - 24px);
+    bottom: 150px;
+  }
+}
+
+.heat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.heat-toggle input {
+  width: auto;
+}
+
+.heat-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.heat-status.error {
+  color: var(--danger);
+}
+
+.heat-slider {
+  display: grid;
+  gap: 4px;
+}
+
+.heat-slider input[type='range'] {
+  padding: 0;
+  border: 0;
+  accent-color: var(--accent);
+}
+
+.heat-time {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+.heat-time span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.heat-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.heat-status.error {
+  flex-wrap: wrap;
+}
+
+.link-button {
+  padding: 4px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--danger);
+  font-weight: 600;
+  cursor: pointer;
+}

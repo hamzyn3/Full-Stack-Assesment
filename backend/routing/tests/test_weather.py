@@ -9,6 +9,7 @@ from routing.services.weather import (
     ForecastRangeError,
     HourlyWeather,
     OpenMeteoClient,
+    WeatherRateLimitError,
     WeatherUnavailableError,
     weather_at,
 )
@@ -99,6 +100,13 @@ class OpenMeteoClientTests(SimpleTestCase):
         get.side_effect = requests.ConnectionError("boom")
         with self.assertRaises(WeatherUnavailableError):
             OpenMeteoClient().forecast([(2.0, 2.0)], START, END)
+
+    @patch("routing.services.weather.requests.get")
+    def test_rate_limit_raises_a_specific_error(self, get):
+        get.return_value = MagicMock(status_code=429)
+        with self.assertRaisesMessage(WeatherRateLimitError, "rate limit"):
+            OpenMeteoClient().forecast([(1.0, 1.0)], START, END)
+        self.assertTrue(issubclass(WeatherRateLimitError, WeatherUnavailableError))
 
     @patch("routing.services.weather.requests.get")
     def test_wrong_number_of_locations_raises(self, get):

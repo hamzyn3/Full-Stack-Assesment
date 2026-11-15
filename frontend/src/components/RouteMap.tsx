@@ -1,10 +1,13 @@
 import L from 'leaflet'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { formatDateTime, formatMiles } from '../format'
 import { RISK_COLORS, RISK_LABELS, RISK_ORDER, routeColor } from '../risk'
-import type { Checkpoint, RouteResult, RoutesResponse } from '../types'
+import type { Checkpoint, HeatmapResponse, RouteResult, RoutesResponse } from '../types'
+import type { HeatmapState } from '../useHeatmap'
+import { HeatLayer } from './HeatLayer'
+import { HeatmapControl } from './HeatmapControl'
 import { RiskBadge } from './RiskBadge'
 
 const US_CENTER: L.LatLngTuple = [39.5, -98.35]
@@ -15,8 +18,16 @@ const destinationIcon = L.divIcon({ className: 'pin', html: 'B', iconSize: [28, 
 
 interface Props {
   data: RoutesResponse | null
+  heatmap: HeatmapState
+  onRetryHeatmap: () => void
   selectedId: string | null
   onSelect: (routeId: string) => void
+}
+
+interface HourState {
+  /** The dataset this hour belongs to, so a new heatmap starts again at +0h. */
+  forData: HeatmapResponse | null
+  hour: number
 }
 
 interface ActiveCheckpoint {
@@ -121,7 +132,7 @@ function CheckpointPopupContent({ route, checkpoint }: { route: RouteResult; che
 function Legend() {
   return (
     <div className="legend" aria-label="Map legend">
-      <strong>Checkpoint risk</strong>
+      <strong>Risk (checkpoints and heatmap)</strong>
       <ul>
         {RISK_ORDER.map((level) => (
           <li key={level}>
@@ -135,8 +146,21 @@ function Legend() {
   )
 }
 
-export function RouteMap({ data, selectedId, onSelect }: Props) {
+export function RouteMap({ data, heatmap, onRetryHeatmap, selectedId, onSelect }: Props) {
   const [active, setActive] = useState<ActiveCheckpoint | null>(null)
+  const [hourState, setHourState] = useState<HourState>({ forData: null, hour: 0 })
+  const [heatVisible, setHeatVisible] = useState(true)
+
+  const heatData = heatmap.status === 'success' ? heatmap.data : null
+  const hour = hourState.forData === heatData ? hourState.hour : 0
+
+  // Stable identity: a new function each render would redraw every memoized route layer on each slider tick.
+  const handleCheckpoint = useCallback(
+    (route: RouteResult, checkpoint: Checkpoint) => {
+      if (data) setActive({ data, route, checkpoint })
+    },
+    [data],
+  )
 
   const popup = data && active && active.data === data ? active : null
 
@@ -148,6 +172,7 @@ export function RouteMap({ data, selectedId, onSelect }: Props) {
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <Pane name={CHECKPOINT_PANE} style={{ zIndex: 450 }} />
+        {heatData && <HeatLayer heatmap={heatData} hour={hour} visible={heatVisible} />}
 
         {data && (
           <>
@@ -158,7 +183,7 @@ export function RouteMap({ data, selectedId, onSelect }: Props) {
                 route={route}
                 selected={route.id === selectedId}
                 onSelect={onSelect}
-                onCheckpoint={(r, checkpoint) => setActive({ data, route: r, checkpoint })}
+                onCheckpoint={handleCheckpoint}
               />
             ))}
             <Marker position={[data.origin.lat, data.origin.lon]} icon={originIcon} interactive={false} />
@@ -178,6 +203,17 @@ export function RouteMap({ data, selectedId, onSelect }: Props) {
           </Popup>
         )}
       </MapContainer>
+      {data && (
+        <HeatmapControl
+          heatmap={heatmap}
+          routes={data}
+          hour={hour}
+          onRetry={onRetryHeatmap}
+          onHourChange={(next) => setHourState({ forData: heatData, hour: next })}
+          visible={heatVisible}
+          onVisibleChange={setHeatVisible}
+        />
+      )}
       {data && <Legend />}
     </div>
   )

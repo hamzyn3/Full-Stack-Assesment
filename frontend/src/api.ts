@@ -1,4 +1,4 @@
-import type { Place, RoutesRequest, RoutesResponse } from './types'
+import type { HeatmapRequest, HeatmapResponse, Place, RoutesRequest, RoutesResponse } from './types'
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -41,6 +41,15 @@ export async function fetchPlaces(query: string, signal?: AbortSignal): Promise<
 
 export async function fetchRoutes(body: RoutesRequest, signal?: AbortSignal): Promise<RoutesResponse> {
   return request('/api/routes/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+}
+
+export async function fetchHeatmap(body: HeatmapRequest, signal?: AbortSignal): Promise<HeatmapResponse> {
+  return request('/api/heatmap/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
