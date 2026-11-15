@@ -62,6 +62,7 @@ REST_FRAMEWORK = {
 # Third-party API configuration (used from Step 2 onward).
 ORS_API_KEY = os.environ.get("ORS_API_KEY", "")
 ORS_BASE_URL = os.environ.get("ORS_BASE_URL", "https://api.openrouteservice.org")
+WEATHER_BASE_URL = os.environ.get("WEATHER_BASE_URL", "https://api.open-meteo.com/v1/forecast")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

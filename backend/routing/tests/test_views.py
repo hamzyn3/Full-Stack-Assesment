@@ -1,8 +1,13 @@
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 
 from routing.services.ors import OrsClient, Place, RawRoute, RouteRequestError, UpstreamError
+from routing.services.route_generation import Route
+from routing.services.weather import ForecastRangeError, HourlyWeather, OpenMeteoClient, WeatherUnavailableError
+
+DEPARTURE = datetime(2026, 11, 20, 8, 0, tzinfo=timezone.utc)
 
 VALID_BODY = {
     "origin": {"label": "Dallas, TX", "lat": 32.78, "lon": -96.8},
@@ -10,6 +15,12 @@ VALID_BODY = {
     "departure_time": "2026-11-20T08:00:00Z",
     "load_weight_lb": 42000,
 }
+
+
+def calm_series(wind=5.0, rain=0.0, hours=72):
+    """Forecast series covering the test departure and the following days."""
+    first = int(DEPARTURE.replace(hour=0).timestamp())
+    return {first + i * 3600: HourlyWeather(wind, rain) for i in range(hours)}
 
 
 class HealthTests(SimpleTestCase):
@@ -45,12 +56,12 @@ class RoutesViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 503)
         self.assertIn("ORS_API_KEY", response.json()["error"])
 
+    @patch.object(OpenMeteoClient, "forecast", side_effect=lambda points, start, end: [calm_series()] * len(points))
     @patch("routing.views.generate_routes")
-    def test_success_shape(self, generate):
-        from routing.services.route_generation import Route
-
+    def test_success_shape(self, generate, forecast):
         generate.return_value = [
             Route("route-1", "Route 1", [(32.78, -96.8), (33.75, -84.39)], 783.4, 50760),
+            Route("route-2", "Route 2", [(32.78, -96.8), (34.0, -90.0), (33.75, -84.39)], 860.0, 55000),
         ]
         response = self.post(VALID_BODY)
         self.assertEqual(response.status_code, 200)
@@ -58,10 +69,71 @@ class RoutesViewTests(SimpleTestCase):
         self.assertEqual(body["origin"]["label"], "Dallas, TX")
         self.assertEqual(body["load_weight_lb"], 42000)
         self.assertEqual(body["departure_time"], "2026-11-20T08:00:00+00:00")
-        route = body["routes"][0]
-        self.assertEqual(route["geometry"], [[32.78, -96.8], [33.75, -84.39]])
-        self.assertEqual(route["distance_miles"], 783.4)
-        self.assertEqual(route["duration_seconds"], 50760)
+        self.assertEqual(body["checkpoint_interval_miles"], 25)  # default
+        self.assertEqual(body["recommendation"]["route_id"], "route-1")
+        self.assertFalse(body["recommendation"]["all_routes_blocked"])
+
+        first, second = body["routes"]
+        self.assertEqual((first["rank"], first["recommended"]), (1, True))
+        self.assertEqual((second["rank"], second["recommended"]), (2, False))
+        self.assertEqual(first["geometry"], [[32.78, -96.8], [33.75, -84.39]])
+        self.assertEqual(first["distance_miles"], 783.4)
+        self.assertEqual(first["duration_seconds"], 50760)
+        self.assertEqual(first["arrival_time"], "2026-11-20T22:06:00+00:00")
+        self.assertEqual(first["max_risk"], "low")
+        self.assertEqual(first["miles_by_risk"]["low"], 783.4)
+        self.assertEqual(set(first["miles_by_risk"]), {"low", "moderate", "high", "severe", "no_travel"})
+
+        checkpoint = first["checkpoints"][1]
+        self.assertEqual(
+            set(checkpoint),
+            {"index", "mile", "lat", "lon", "eta", "segment_miles", "wind_mph", "rain_in_hr", "risk"},
+        )
+        self.assertEqual(checkpoint["mile"], 25)
+        self.assertEqual(checkpoint["risk"], "low")
+        self.assertEqual(len(first["checkpoints"]), 33)  # 0, 25, ..., 775, 783.4
+
+    @patch.object(OpenMeteoClient, "forecast", side_effect=lambda points, start, end: [calm_series()] * len(points))
+    @patch("routing.views.generate_routes")
+    def test_interval_option_and_validation(self, generate, forecast):
+        generate.return_value = [Route("route-1", "Route 1", [(32.78, -96.8), (33.75, -84.39)], 100.0, 6000)]
+        body = self.post({**VALID_BODY, "checkpoint_interval_miles": 50}).json()
+        self.assertEqual(body["checkpoint_interval_miles"], 50)
+        self.assertEqual([c["mile"] for c in body["routes"][0]["checkpoints"]], [0, 50, 100])
+        self.assertEqual(self.post({**VALID_BODY, "checkpoint_interval_miles": 15}).status_code, 400)
+
+    @patch.object(OpenMeteoClient, "forecast")
+    @patch("routing.views.generate_routes")
+    def test_severe_weather_changes_the_recommendation(self, generate, forecast):
+        # Route 1 is faster but runs into 50 mph wind (No Travel for a 42,000 lb load); route 2 is calm.
+        generate.return_value = [
+            Route("route-1", "Route 1", [(32.0, -96.0), (32.0, -90.0)], 100.0, 6000),
+            Route("route-2", "Route 2", [(32.0, -96.0), (34.0, -93.0), (32.0, -90.0)], 120.0, 7000),
+        ]
+        forecast.side_effect = lambda points, start, end: [
+            calm_series(wind=50.0) if lat == 32.0 and -95.0 < lon < -91.0 else calm_series() for lat, lon in points
+        ]
+        body = self.post({**VALID_BODY, "checkpoint_interval_miles": 10}).json()
+        self.assertEqual(body["recommendation"]["route_id"], "route-2")
+        by_id = {r["id"]: r for r in body["routes"]}
+        self.assertTrue(by_id["route-1"]["has_no_travel"])
+        self.assertEqual(by_id["route-1"]["max_risk"], "no_travel")
+        self.assertFalse(by_id["route-2"]["has_no_travel"])
+        self.assertEqual(body["routes"][0]["id"], "route-2")
+
+    @patch.object(OpenMeteoClient, "forecast", side_effect=ForecastRangeError("out of range"))
+    @patch("routing.views.generate_routes")
+    def test_forecast_out_of_range_is_422(self, generate, forecast):
+        generate.return_value = [Route("route-1", "Route 1", [(32.78, -96.8), (33.75, -84.39)], 100.0, 6000)]
+        response = self.post(VALID_BODY)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"], "out of range")
+
+    @patch.object(OpenMeteoClient, "forecast", side_effect=WeatherUnavailableError("weather down"))
+    @patch("routing.views.generate_routes")
+    def test_weather_outage_is_502(self, generate, forecast):
+        generate.return_value = [Route("route-1", "Route 1", [(32.78, -96.8), (33.75, -84.39)], 100.0, 6000)]
+        self.assertEqual(self.post(VALID_BODY).status_code, 502)
 
     @patch("routing.views.generate_routes", return_value=[])
     def test_no_routes_is_422(self, _):

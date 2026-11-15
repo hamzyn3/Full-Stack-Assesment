@@ -34,3 +34,4 @@ class RouteRequestSerializer(serializers.Serializer):
     destination = LocationField()
     departure_time = serializers.DateTimeField()
     load_weight_lb = serializers.IntegerField(min_value=0, max_value=200_000)
+    checkpoint_interval_miles = serializers.ChoiceField(choices=[10, 25, 50], default=25)
