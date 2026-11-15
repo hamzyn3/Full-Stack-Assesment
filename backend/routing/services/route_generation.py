@@ -6,6 +6,7 @@ points and keep the ones that are genuinely different and not absurd detours.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from .geo import Point, haversine_miles, offset_midpoint, path_overlap
@@ -35,15 +36,7 @@ def generate_routes(client: OrsClient, origin: Point, destination: Point) -> lis
     candidates = _initial_candidates(client, origin, destination)
 
     if len(_select(candidates)) < TARGET_ROUTES and haversine_miles(origin, destination) > 0.5:
-        for fraction in VIA_OFFSETS:
-            via = offset_midpoint(origin, destination, fraction)
-            try:
-                candidates.extend(client.directions([origin, via, destination]))
-            except RouteRequestError as exc:
-                logger.info("Via-point route skipped: %s", exc)
-                continue
-            if len(_select(candidates)) >= TARGET_ROUTES:
-                break
+        candidates.extend(_via_point_candidates(client, origin, destination))
 
     selected = _select(candidates)
     return [
@@ -65,6 +58,25 @@ def _initial_candidates(client: OrsClient, origin: Point, destination: Point) ->
         # Typically the alternative-route distance limit; retry for a single route.
         logger.info("Alternatives unavailable (%s); requesting a single route.", exc)
         return list(client.directions([origin, destination]))
+
+
+def _via_point_candidates(client: OrsClient, origin: Point, destination: Point) -> list[RawRoute]:
+    """Routes through each sideways-offset via point, requested in parallel.
+
+    The requests are independent, so running them together takes about as long
+    as one. A via point that cannot be routed is skipped.
+    """
+    via_points = [offset_midpoint(origin, destination, fraction) for fraction in VIA_OFFSETS]
+
+    def fetch(via: Point) -> list[RawRoute]:
+        try:
+            return list(client.directions([origin, via, destination]))
+        except RouteRequestError as exc:
+            logger.info("Via-point route skipped: %s", exc)
+            return []
+
+    with ThreadPoolExecutor(max_workers=len(via_points)) as pool:
+        return [route for routes in pool.map(fetch, via_points) for route in routes]
 
 
 def _select(candidates: list[RawRoute]) -> list[RawRoute]:

@@ -66,6 +66,16 @@ Boundary decisions where the task table is ambiguous for decimal values: wind ba
 
 4. **Recommendation.** Routes are ranked by fewest No Travel miles (a route that cannot be driven never beats one that can), then the task's order: fewest Severe miles, fewest High miles, lowest average risk (mile-weighted, Low=0 to No Travel=4), then shortest travel time. Comparisons use 0.1 mile and 0.01 risk precision so floating-point noise cannot decide a tie. If every route contains No Travel conditions, the response says so (`all_routes_blocked`) and picks the one with the fewest No Travel miles.
 
+## Frontend
+
+React + Vite + TypeScript with Leaflet (react-leaflet) on OpenStreetMap tiles.
+
+- **Form:** origin and destination with debounced place suggestions (keyboard accessible), departure date/time (entered in local time, sent as UTC), load weight, and checkpoint interval (10/25/50 miles). Typed text that was not picked from the suggestions is geocoded by the backend.
+- **Map:** all routes are drawn at once, one colour per route; click a line or a card to select a route. Checkpoints are dots coloured by risk (click one for ETA, wind, rain, risk and the road it covers). A and B mark the origin and destination.
+- **Summary panel:** the recommendation and its reason, and a card per route with distance, drive time, arrival, average risk, max risk and a miles-by-risk bar, plus a checkpoint table for the selected route. If every route is No Travel, the panel says so instead of recommending one.
+- **Performance:** the map uses a canvas renderer; checkpoints live in their own pane (always above route lines); per-route layers are memoized so selecting a route only restyles; one shared popup serves all checkpoints. Measured in Chrome with ~260 checkpoints on screen (10-mile interval): panning and zooming held 60 fps.
+- All times are shown in the browser's local time zone.
+
 ## Environment variables
 
 | Variable | Where | Purpose |
