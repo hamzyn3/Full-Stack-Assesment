@@ -26,7 +26,7 @@ A React + Django app that helps a truck driver choose the safest route based on 
 | Backend | Django + Django REST Framework, stateless (no database) |
 | Routing and geocoding | [OpenRouteService](https://openrouteservice.org) (`driving-hgv` truck profile). Free API key required |
 | Weather | [Open-Meteo](https://open-meteo.com) hourly wind and precipitation. No key |
-| Hosting | Render (API as a web service, frontend as a static site) via `render.yaml` |
+| Hosting | Vercel (two projects: the Django API as a serverless function, the frontend as a static site) |
 
 ## Run it locally
 
@@ -152,6 +152,7 @@ The backend tests concentrate on the logic the task weights most: every risk bou
 
 ```
 backend/
+  api/index.py             Vercel serverless entry point (vercel.json configures it)
   config/                  Django settings and root URLs
   routing/
     views.py               HTTP layer: validation, error mapping, JSON shape
@@ -172,7 +173,6 @@ frontend/src/
   api.ts, types.ts         Backend client and response types
   useHeatmap.ts            Background heatmap loading with retry
   components/              Form, map, heat layer, summary cards, tables
-render.yaml                Render blueprint (API + static site)
 docs/                      Deployment guide and walkthrough outline
 ```
 
@@ -182,7 +182,7 @@ docs/                      Deployment guide and walkthrough outline
 | --- | --- | --- |
 | `SECRET_KEY` | backend | Django secret. Required when `DEBUG` is not `True` |
 | `DEBUG` | backend | `True` for local development |
-| `ALLOWED_HOSTS` | backend | Comma-separated hostnames (Render's own hostname is added automatically) |
+| `ALLOWED_HOSTS` | backend | Comma-separated hostnames  |
 | `CORS_ALLOWED_ORIGINS` | backend | Comma-separated frontend origins |
 | `ORS_API_KEY` | backend | OpenRouteService key (geocoding and routing) |
 | `ORS_BASE_URL` | backend | Optional override of the ORS base URL |

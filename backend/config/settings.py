@@ -28,9 +28,6 @@ if not SECRET_KEY:
         raise RuntimeError("SECRET_KEY environment variable is required when DEBUG is False.")
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
-# Render exposes the service's public hostname here, so it never needs to be listed by hand.
-if os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
-    ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
 INSTALLED_APPS = [
     "corsheaders",
