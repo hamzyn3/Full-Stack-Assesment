@@ -141,7 +141,7 @@ Errors are `{"error": "..."}` with status 400 (invalid input), 422 (unroutable p
 
 ```bash
 cd backend && python manage.py test     # 115 tests
-cd frontend && npm test                 # 20 tests
+cd frontend && npm test                 # 41 tests
 cd frontend && npm run build            # type-checks, then builds
 cd frontend && npm run lint
 ```
