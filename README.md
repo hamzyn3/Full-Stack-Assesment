@@ -47,6 +47,15 @@ cp .env.example .env
 npm run dev
 ```
 
+### Or with Docker
+
+```bash
+cp backend/.env.example backend/.env    # set ORS_API_KEY
+docker compose up --build               # app at http://localhost:8080
+```
+
+Details in [docs/DOCKER.md](docs/DOCKER.md).
+
 ## How it works
 
 A search runs these steps on the backend. Each lives in its own module under [backend/routing/services/](backend/routing/services/) and is unit tested.
